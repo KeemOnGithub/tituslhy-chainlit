@@ -1,5 +1,6 @@
 # app.py
 import json
+from typing import Optional
 
 import chainlit as cl
 from chainlit.input_widget import Select, Switch, Slider
@@ -31,6 +32,16 @@ vector_store = SupabaseVectorStore(
 )
 index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
 chat_engine = index.as_chat_engine(chat_mode=ChatMode.BEST, llm=llm, verbose=True)
+
+
+@cl.password_auth_callback
+def auth_callback(username: str, password: str) -> Optional[cl.User]:
+    """Password auth handler for login"""
+
+    if (username, password) == ("admin", "admin"):
+        return cl.User(identifier="admin", metadata={"role": "ADMIN"})
+    else:
+        return None
 
 @cl.set_chat_profiles
 async def chat_profile():
@@ -84,6 +95,7 @@ async def on_message(message: cl.Message):
 
     agent = cl.user_session.get("agent")
     memory = cl.user_session.get("memory")
+    chat_profile = cl.user_session.get("chat_profile")
     chat_history = memory.get()
     msg = cl.Message("")
 
