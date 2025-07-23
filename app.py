@@ -1,10 +1,13 @@
 # app.py
+import json
+
 import chainlit as cl
 from chainlit.input_widget import Select, Switch, Slider
 
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.chat_engine import SimpleChatEngine
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.chat_engine.types import ChatMode
 from llama_index.core.memory import ChatMemoryBuffer, Memory
 from llama_index.llms.openai import OpenAI
 
@@ -14,13 +17,37 @@ from llama_index.vector_stores.supabase import SupabaseVectorStore
 
 logger = logging.getLogger(__name__)
 
+with open("system_prompts.json", encoding='utf-8') as json_file:
+    SYSTEM_PROMPTS = json.load(json_file)
+
 llm = OpenAI(model="gpt-4o-mini", temperature=0)
-data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
+# data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
+
+DB_CONNECTION = "postgresql://postgres.thtacujdwcbdxuzqyidl:LQhaireel107@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+
 vector_store = SupabaseVectorStore(
     postgres_connection_string=DB_CONNECTION,
-    collection_name='hrbrunei_files'
+    collection_name='pitchmaster_files'
 )
-index = VectorStoreIndex.from_documents(data)
+index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+chat_engine = index.as_chat_engine(chat_mode=ChatMode.BEST, llm=llm, verbose=True)
+
+@cl.set_chat_profiles
+async def chat_profile():
+    """Chat profile setter."""
+
+    return [
+        cl.ChatProfile(
+            name="GELIGA HR",
+            markdown_description="This LLM is your personal HR assistant.",
+            icon="public/assistant.png"
+        ),
+        cl.ChatProfile(
+            name="GELIGA PitchMaster",
+            markdown_description="This LLM is a product pitching assistant.",
+            icon="public/cowboy.png"
+        )
+    ]
 
 @cl.on_chat_start
 async def start():
@@ -35,9 +62,7 @@ async def start():
     )
     cl.user_session.set(
         "agent",
-        SimpleChatEngine.from_defaults(
-            llm=openai_llm,
-        )
+        chat_engine
     )
     memory = Memory.from_defaults()
     cl.user_session.set("memory", memory)
