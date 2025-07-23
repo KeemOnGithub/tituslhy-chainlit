@@ -10,10 +10,16 @@ from llama_index.llms.openai import OpenAI
 
 import logging
 
+from llama_index.vector_stores.supabase import SupabaseVectorStore
+
 logger = logging.getLogger(__name__)
 
 llm = OpenAI(model="gpt-4o-mini", temperature=0)
 data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
+vector_store = SupabaseVectorStore(
+    postgres_connection_string=DB_CONNECTION,
+    collection_name='hrbrunei_files'
+)
 index = VectorStoreIndex.from_documents(data)
 
 @cl.on_chat_start
