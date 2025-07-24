@@ -3,6 +3,7 @@ import json
 from typing import Optional
 
 import chainlit as cl
+import vecs
 from chainlit.input_widget import Select, Switch, Slider
 
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
@@ -22,7 +23,6 @@ with open("system_prompts.json", encoding='utf-8') as json_file:
     SYSTEM_PROMPTS = json.load(json_file)
 
 llm = OpenAI(model="gpt-4o-mini", temperature=0)
-# data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
 
 DB_CONNECTION = "postgresql://postgres.thtacujdwcbdxuzqyidl:LQhaireel107@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
 
@@ -30,9 +30,11 @@ vector_store = SupabaseVectorStore(
     postgres_connection_string=DB_CONNECTION,
     collection_name='pitchmaster_files'
 )
-index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-chat_engine = index.as_chat_engine(chat_mode=ChatMode.BEST, llm=llm, verbose=True)
 
+index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+# Add this debug code to check if documents exist
+print(f"Number of documents in index: {len(index.docstore.docs)}")
+chat_engine = index.as_chat_engine(chat_mode=ChatMode.BEST, llm=llm, verbose=True)
 
 @cl.password_auth_callback
 def auth_callback(username: str, password: str) -> Optional[cl.User]:
@@ -63,19 +65,23 @@ async def chat_profile():
 @cl.on_chat_start
 async def start():
     """Handler for chat start events. Sets session variables."""
-    system_prompt = SYSTEM_PROMPTS[chat_profile]
+    cl.user_session.set(
+        "agent",
+        chat_engine
+    )
     memory = ChatMemoryBuffer.from_defaults()
+    cl.user_session.set("memory", memory)
+    chat_profile = cl.user_session.get("chat_profile")
+    user = cl.user_session.get("user")
+    logger.info(f"{user.identifier} has started the conversation")
+
+    system_prompt = SYSTEM_PROMPTS[chat_profile]
     memory.put(
         ChatMessage(
             role=MessageRole.SYSTEM,
             content=system_prompt
         )
     )
-    cl.user_session.set(
-        "agent",
-        chat_engine
-    )
-    memory = Memory.from_defaults()
     cl.user_session.set("memory", memory)
     settings = await cl.ChatSettings(
         [
